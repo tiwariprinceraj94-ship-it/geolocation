@@ -1,0 +1,159 @@
+import requests
+import folium
+from folium import plugins
+import webbrowser
+import sys
+from datetime import datetime
+
+class GeolocationTracker:
+    def __init__(self):
+        # Free IP geolocation APIs (no API key required)
+        self.ip_api_url = "http://ip-api.com/json/"
+        self.ipinfo_url = "https://ipinfo.io/json"
+        
+    def get_location_from_ip(self, ip_address):
+        """Fetch geolocation data from IP address"""
+        try:
+            # Using ip-api.com (free, no key required)
+            response = requests.get(f"{self.ip_api_url}{ip_address}")
+            data = response.json()
+            
+            if data['status'] == 'success':
+                return {
+                    'ip': data['query'],
+                    'city': data['city'],
+                    'region': data['regionName'],
+                    'country': data['country'],
+                    'country_code': data['countryCode'],
+                    'lat': data['lat'],
+                    'lon': data['lon'],
+                    'isp': data['isp'],
+                    'org': data['org'],
+                    'timezone': data['timezone'],
+                    'zip': data['zip']
+                }
+            else:
+                print("❌ IP lookup failed")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error fetching location: {e}")
+            return None
+    
+    def get_current_ip(self):
+        """Get your current public IP address"""
+        try:
+            response = requests.get('https://api.ipify.org?format=json')
+            return response.json()['ip']
+        except:
+            return None
+    
+    def create_map(self, location_data):
+        """Create interactive map with marker"""
+        if not location_data or location_data['lat'] == 0:
+            print("❌ Cannot create map - invalid coordinates")
+            return None
+        
+        # Create map centered on the location
+        m = folium.Map(
+            location=[location_data['lat'], location_data['lon']],
+            zoom_start=12,
+            tiles='OpenStreetMap'
+        )
+        
+        # Add marker with popup info
+        popup_html = f"""
+        <div style="width: 300px;">
+            <h3>📍 IP Geolocation</h3>
+            <table style="width:100%; border-collapse: collapse;">
+                <tr><td><b>IP:</b></td><td>{location_data['ip']}</td></tr>
+                <tr><td><b>City:</b></td><td>{location_data['city']}</td></tr>
+                <tr><td><b>Region:</b></td><td>{location_data['region']}</td></tr>
+                <tr><td><b>Country:</b></td><td>{location_data['country']}</td></tr>
+                <tr><td><b>ISP:</b></td><td>{location_data['isp']}</td></tr>
+                <tr><td><b>Coordinates:</b></td><td>{location_data['lat']}, {location_data['lon']}</td></tr>
+                <tr><td><b>ZIP:</b></td><td>{location_data['zip']}</td></tr>
+                <tr><td><b>Time:</b></td><td>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</td></tr>
+            </table>
+        </div>
+        """
+        
+        folium.Marker(
+            [location_data['lat'], location_data['lon']],
+            popup=folium.Popup(popup_html, max_width=350),
+            tooltip=f"{location_data['city']}, {location_data['country']}",
+            icon=folium.Icon(color='red', icon='map-marker')
+        ).add_to(m)
+        
+        # Add fullscreen and minimap plugins
+        plugins.Fullscreen().add_to(m)
+        plugins.MiniMap().add_to(m)
+        
+        return m
+    
+    def display_results(self, location_data):
+        """Display location info in console"""
+        if not location_data:
+            return
+        
+        print("\n" + "="*60)
+        print("🎯 GEOLOCATION TRACKER RESULTS")
+        print("="*60)
+        print(f"🌐 IP Address:        {location_data['ip']}")
+        print(f"📍 City:             {location_data['city']}")
+        print(f"🌆 Region:           {location_data['region']}")
+        print(f"🏳️  Country:         {location_data['country']} ({location_data['country_code']})")
+        print(f"📡 ISP:              {location_data['isp']}")
+        print(f"🏢 Organization:     {location_data['org']}")
+        print(f"📊 ZIP Code:         {location_data['zip']}")
+        print(f"🌍 Coordinates:      {location_data['lat']}, {location_data['lon']}")
+        print(f"🕐 Timezone:         {location_data['timezone']}")
+        print("="*60)
+
+def main():
+    tracker = GeolocationTracker()
+    
+    print("🚀 GEOLOCATION TRACKER")
+    print("======================")
+    
+    # Get IP from user input or use current IP
+    ip = input("\nEnter IP address (or press Enter for your current IP): ").strip()
+    
+    if not ip:
+        print("🔍 Fetching your current public IP...")
+        ip = tracker.get_current_ip()
+        if not ip:
+            print("❌ Could not detect current IP")
+            sys.exit(1)
+        print(f"📡 Your current IP: {ip}")
+    
+    print(f"\n🔍 Tracking IP: {ip}")
+    print("⏳ Fetching geolocation data...")
+    
+    # Get location data
+    location_data = tracker.get_location_from_ip(ip)
+    
+    if location_data:
+        tracker.display_results(location_data)
+        
+        # Create and save map
+        print("\n🗺️  Creating interactive map...")
+        map_obj = tracker.create_map(location_data)
+        
+        if map_obj:
+            map_filename = f"geolocation_{ip.replace('.', '_').replace(':', '_')}.html"
+            map_obj.save(map_filename)
+            print(f"✅ Map saved as: {map_filename}")
+            
+            # Auto-open in browser
+            open_browser = input("\nOpen map in browser? (y/n): ").lower().startswith('y')
+            if open_browser:
+                import os
+                webbrowser.open(f"file://{os.path.abspath(map_filename)}")
+        else:
+            print("❌ Could not create map")
+    else:
+        print("❌ No location data found for this IP")
+
+if __name__ == "__main__":
+    main()
